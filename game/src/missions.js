@@ -257,7 +257,7 @@ function createMissions({ flight, entities, effects, audio }) {
       Math.abs(state.position.z - AIRPORT.z) < AIRPORT.width / 2;
     if (state.onGround && onRunway && state.speed < 14 && flown) {
       landedTimer += dt;
-      if (landedTimer < 0.1) audio.thump(clamp(state.touchdownRate / 4, 0.3, 1));
+      if (landedTimer < 0.1) audio.thump(clamp(state.touchdownRate / 4, 0.3, 1), state.touchdownRate);
       if (landedTimer > 0.9) {
         if (objectivesDone()) finish(true);
         else finish(false, 'landed with the job unfinished');

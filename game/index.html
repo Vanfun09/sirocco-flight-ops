@@ -3,15 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Sirocco — fly a light aircraft along a coastal ridge, run the ring course, fight the weather and land on runway 09. Plain WebGL, no plugins, no network.">
 <link rel="icon" href="data:,">
 <title>Sirocco — Flight Ops</title>
 <style>
+  /* Everything is a full-bleed stack: WebGL at the bottom, the 2D HUD above it. */
   html, body { margin: 0; height: 100%; overflow: hidden; background: #06080d; }
   #stage { position: fixed; inset: 0; }
   #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 1; }
+  /* The HUD is a bitmap, not a control surface: input belongs to the canvas underneath. */
   #hud { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 2; pointer-events: none; }
   #boot { position: absolute; inset: 0; display: grid; place-items: center; color: #cfd8e3;
           font: 20px/1.5 system-ui, "Segoe UI", sans-serif; letter-spacing: .04em; }
+  /* Screen-reader only, and deliberately outside the visual stack. */
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
 </head>
@@ -22,8 +26,13 @@
   <div id="boot">Sirocco</div>
 </div>
 <p id="status" role="status" aria-live="polite"></p>
-<!-- three.js r149 is vendored here so the game makes no network request; everything after it is
-     this build's own code, loaded as plain scripts so game/index.html also runs from file://. -->
+<noscript>
+  Sirocco needs JavaScript: the aeroplane, the terrain and the instrument panel are all drawn by
+  this page in the browser, so there is no static version to show.
+</noscript>
+<!-- three.js r149 is vendored so the game makes no network request. Everything after it is this
+     build's own code, loaded as plain scripts in dependency order so game/index.html also runs
+     straight from file://. -->
 <script src="./vendor/three.min.js"></script>
 <script src="./src/config.js"></script>
 <script src="./src/random.js"></script>

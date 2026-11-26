@@ -36,7 +36,7 @@ scene.add(aircraft.shadow);
 const flight = createFlight(terrain);
 const rig = createCameraRig(camera);
 const hud = createHud(hudCanvas);
-const input = createInput(hudCanvas);
+const input = createInput(canvas);
 const effects = createEffects(scene);
 const entities = createEntities(scene, terrain);
 const audio = createAudio();
@@ -102,7 +102,10 @@ function updateFlight(dt) {
   sample.fire = sample.fire || input.keys.has('KeyF');
   const state = flight.update(dt, sample);
 
-  if (state.hull < lastHull) damageFlash = 1;
+  if (state.hull < lastHull) {
+    damageFlash = 1;
+    rig.shake(0.6);
+  }
   lastHull = state.hull;
   damageFlash = Math.max(0, damageFlash - dt * 1.6);
 
@@ -119,7 +122,7 @@ function updateFlight(dt) {
 
   if (sample.fire && screen === 'flying') missions.shoot(camera);
   missions.update(dt, camera);
-  effects.update(dt, state);
+  effects.update(dt, { player: state, wingtips: () => aircraft.wingtips() });
   rig.update(dt, flight);
   sky.update(dt, camera);
 
@@ -169,7 +172,9 @@ function frameView() {
       messageAlpha: missions.messageAlpha,
       pullUp: missions.pullUp,
       panel: rig.mode === 'cockpit' ? 'full' : 'compact',
-      hint: rig.mode === 'cockpit' ? 'G GEAR   Z X FLAPS   SHIFT/CTRL THROTTLE   F GUNS' : 'W S PITCH   A D ROLL   Q E RUDDER   SHIFT THROTTLE   G GEAR   C VIEW',
+      hint: rig.mode === 'cockpit'
+        ? `G GEAR   Z X FLAPS   SHIFT/CTRL THROTTLE   F GUNS   ${input.state.steering === 'pointer' ? 'POINTER STICK' : 'KEYS'}`
+        : `W S PITCH   A D ROLL   Q E RUDDER   SHIFT THROTTLE   G GEAR   C VIEW   ${input.state.steering === 'pointer' ? 'POINTER STICK' : 'KEYS'}`,
     });
     if (paused) hud.drawPaused();
   } else if (screen === 'title') {

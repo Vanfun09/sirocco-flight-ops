@@ -13,6 +13,11 @@ const GLASS = new THREE.MeshStandardMaterial({
 });
 const METAL = new THREE.MeshStandardMaterial({ color: 0x9aa2aa, roughness: 0.55, metalness: 0.35 });
 
+// Wingtip offsets, shared by the strobe sprites and wingtips() so contrails leave from the lens.
+const WING_TIP_X = 5.35;
+const WING_TIP_Y = -0.1;
+const WING_TIP_Z = 0.95;
+
 function wingGeometry(span, rootChord, tipChord, thickness) {
   const shape = new THREE.Shape();
   shape.moveTo(0, -rootChord / 2);
@@ -64,7 +69,6 @@ function createAircraft() {
   wingMirror.rotation.z = -0.035;
   wingMirror.position.x = 0;
   group.add(wingMirror);
-
 
   const belly = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.32, 3.4), DARK);
   belly.position.set(0, -0.62, 0.7);
@@ -232,10 +236,27 @@ function createAircraft() {
   const strobes = [];
   for (const side of [-1, 1]) {
     const sprite = new THREE.Sprite(strobeMaterial.clone());
-    sprite.position.set(side * 5.35, -0.1, 0.95);
+    sprite.position.set(side * WING_TIP_X, WING_TIP_Y, WING_TIP_Z);
     sprite.scale.setScalar(1.1);
     group.add(sprite);
     strobes.push(sprite);
+  }
+
+  /**
+   * Both wingtip positions in world space, in the order the strobes were added (-1 then +1).
+   * Pass a pair of vectors to reuse them; contrails call this every frame.
+   */
+  function wingtips(target) {
+    const out = target || [new THREE.Vector3(), new THREE.Vector3()];
+    out[0]
+      .set(-WING_TIP_X, WING_TIP_Y, WING_TIP_Z)
+      .applyQuaternion(group.quaternion)
+      .add(group.position);
+    out[1]
+      .set(WING_TIP_X, WING_TIP_Y, WING_TIP_Z)
+      .applyQuaternion(group.quaternion)
+      .add(group.position);
+    return out;
   }
 
   const shadowTexture = makeShadowTexture();
@@ -306,7 +327,21 @@ function createAircraft() {
     shadow.visible = agl < 420;
   }
 
-  return { group, wheels, propGroup, propDisc, navRed, navGreen, strobes, update, setCamera, state, shadow, placeShadow };
+  return {
+    group,
+    wheels,
+    propGroup,
+    propDisc,
+    navRed,
+    navGreen,
+    strobes,
+    wingtips,
+    update,
+    setCamera,
+    state,
+    shadow,
+    placeShadow,
+  };
 }
 
 function makeShadowTexture() {

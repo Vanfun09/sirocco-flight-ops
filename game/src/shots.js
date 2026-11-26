@@ -16,6 +16,16 @@ function createShotRunner(context) {
   let built = false;
   let lastView = null;
 
+  const forwardAxis = new THREE.Vector3();
+  const rightAxis = new THREE.Vector3();
+  const upAxis = new THREE.Vector3();
+  const flatForward = new THREE.Vector3();
+  const flatRight = new THREE.Vector3();
+  const aim = new THREE.Vector3();
+  const scratch = new THREE.Vector3();
+  const eyeOffset = new THREE.Vector3(0, 0.98, -0.35);
+  const levelLift = new THREE.Vector3(0, 3.6, 0);
+
   function paint(view) {
     hud.drawFlight(view);
     lastView = view;
@@ -27,7 +37,7 @@ function createShotRunner(context) {
     state.quaternion.setFromEuler(new THREE.Euler(pitch, heading, bank, 'YXZ'));
     state.speed = speed;
     state.throttle = throttle;
-    state.velocity.copy(new THREE.Vector3(0, 0, -1).applyQuaternion(state.quaternion).multiplyScalar(speed));
+    state.velocity.set(0, 0, -1).applyQuaternion(state.quaternion).multiplyScalar(speed);
     state.onGround = false;
     state.gearDown = options.gearDown ?? false;
     state.flap = options.flap ?? 0;
@@ -51,45 +61,42 @@ function createShotRunner(context) {
   }
 
   function chaseCamera(distance, height, look, lateral = 0, lookLateral = 0) {
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(flight.state.quaternion);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(flight.state.quaternion);
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(flight.state.quaternion);
+    forwardAxis.set(0, 0, -1).applyQuaternion(flight.state.quaternion);
+    rightAxis.set(1, 0, 0).applyQuaternion(flight.state.quaternion);
+    upAxis.set(0, 1, 0).applyQuaternion(flight.state.quaternion);
     camera.position
       .copy(flight.state.position)
-      .addScaledVector(forward, -distance)
-      .addScaledVector(up, height)
-      .addScaledVector(right, lateral);
+      .addScaledVector(forwardAxis, -distance)
+      .addScaledVector(upAxis, height)
+      .addScaledVector(rightAxis, lateral);
     camera.up.set(0, 1, 0);
-    const aim = flight.state.position
-      .clone()
-      .addScaledVector(forward, look)
-      .addScaledVector(right, lookLateral)
-      .add(new THREE.Vector3(0, 3.6, 0));
+    aim.copy(flight.state.position)
+      .addScaledVector(forwardAxis, look)
+      .addScaledVector(rightAxis, lookLateral)
+      .add(levelLift);
     camera.lookAt(aim);
     camera.fov = 58;
     camera.updateProjectionMatrix();
   }
 
   function cockpitCamera() {
-    camera.position
-      .copy(flight.state.position)
-      .add(new THREE.Vector3(0, 0.98, -0.35).applyQuaternion(flight.state.quaternion));
+    camera.position.copy(flight.state.position).add(scratch.copy(eyeOffset).applyQuaternion(flight.state.quaternion));
     camera.quaternion.copy(flight.state.quaternion);
     camera.fov = 76;
     camera.updateProjectionMatrix();
   }
 
   function gate(offsetForward, lateral, drop, radius = 42) {
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(flight.state.quaternion).setY(0).normalize();
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(flight.state.quaternion).setY(0).normalize();
+    flatForward.set(0, 0, -1).applyQuaternion(flight.state.quaternion).setY(0).normalize();
+    flatRight.set(1, 0, 0).applyQuaternion(flight.state.quaternion).setY(0).normalize();
     const center = flight.state.position
       .clone()
-      .addScaledVector(forward, offsetForward)
-      .addScaledVector(right, lateral)
+      .addScaledVector(flatForward, offsetForward)
+      .addScaledVector(flatRight, lateral)
       .add(new THREE.Vector3(0, -drop, 0));
     const floor = terrain.heightAt(center.x, center.z) + radius + 26;
     if (center.y < floor) center.y = floor;
-    return entities.addRing(center, forward, radius);
+    return entities.addRing(center, flatForward, radius);
   }
 
   function cover() {
@@ -286,9 +293,22 @@ function createShotRunner(context) {
       camera.lookAt(flight.state.position);
       camera.fov = 45;
       camera.updateProjectionMatrix();
-      paint({ state: flight.state, camera, mission: MISSIONS[0], targets: [], objective: 'Aircraft inspection', objectiveSub: '', progress: 0, score: 0, clock: '', message: '', pullUp: false, panel: 'compact', hint: '' });
-    }
-    else if (name === '2-storm') storm();
+      paint({
+        state: flight.state,
+        camera,
+        mission: MISSIONS[0],
+        targets: [],
+        objective: 'Aircraft inspection',
+        objectiveSub: '',
+        progress: 0,
+        score: 0,
+        clock: '',
+        message: '',
+        pullUp: false,
+        panel: 'compact',
+        hint: '',
+      });
+    } else if (name === '2-storm') storm();
     else if (name === '3-landing') landing();
     else if (name === '4-cockpit') cockpitDusk();
     else cover();
@@ -342,7 +362,7 @@ function createShotRunner(context) {
       controls: flight.state.controls,
       airspeed: flight.state.speed,
     });
-    effects.update(dt, flight.state);
+    effects.update(dt, { player: flight.state, wingtips: aircraft.wingtips });
     entities.update(dt, {});
     sky.update(dt, camera);
     aircraft.placeShadow(

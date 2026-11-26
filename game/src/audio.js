@@ -10,6 +10,7 @@ function createAudio() {
   let windFilter = null;
   let muted = false;
   let started = false;
+  let volume = 0.55;
 
   function boot() {
     if (started) return;
@@ -17,7 +18,7 @@ function createAudio() {
     if (!Ctor) return;
     context = new Ctor();
     master = context.createGain();
-    master.gain.value = 0.55;
+    master.gain.value = muted ? 0 : volume;
     master.connect(context.destination);
 
     engineGain = context.createGain();
@@ -61,6 +62,19 @@ function createAudio() {
     if (context && context.state === 'suspended') context.resume();
   }
 
+  function applyMaster() {
+    if (!master) return;
+    const target = muted ? 0 : volume;
+    master.gain.setTargetAtTime(target, context.currentTime, 0.03);
+  }
+
+  /** Master level in 0..1. Muting is remembered separately, so raising the level while muted stays quiet. */
+  function setVolume(level) {
+    volume = clamp(Number(level) || 0, 0, 1);
+    applyMaster();
+    return volume;
+  }
+
   function update(flight, dt) {
     if (!started || muted) return;
     const { throttle, speed, hull, onGround } = flight;
@@ -88,14 +102,19 @@ function createAudio() {
     source.start();
   }
 
-  function thump(strength = 1) {
+  /**
+   * A weighted thud. `strength` is the loudness, `sink` (0..6) how far the gear or the wheels
+   * slammed down: the harder the arrival, the lower and duller the note.
+   */
+  function thump(strength = 1, sink = 0) {
     if (!started || muted) return;
+    const drop = clamp(sink / 6, 0, 1);
     const osc = context.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(90, context.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, context.currentTime + 0.22);
+    osc.frequency.setValueAtTime(90 - drop * 24, context.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40 - drop * 14, context.currentTime + 0.22);
     const gain = context.createGain();
-    gain.gain.value = 0.25 * strength;
+    gain.gain.value = 0.25 * clamp(strength, 0, 1.6) * (1 + drop * 0.4);
     gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.26);
     osc.connect(gain).connect(master);
     osc.start();
@@ -130,11 +149,23 @@ function createAudio() {
 
   function toggleMute() {
     muted = !muted;
-    if (master) master.gain.value = muted ? 0 : 0.55;
+    applyMaster();
     return muted;
   }
 
-  return { boot, resume, update, gun, thump, chime, alarm, toggleMute, get muted() { return muted; } };
+  return {
+    boot,
+    resume,
+    update,
+    gun,
+    thump,
+    chime,
+    alarm,
+    setVolume,
+    toggleMute,
+    get muted() { return muted; },
+    get volume() { return volume; },
+  };
 }
 
 function makeNoise(context, seconds) {

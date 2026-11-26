@@ -47,6 +47,11 @@ function createEffects(scene) {
   let smokeClock = 0;
   let contrailClock = 0;
 
+  // Scratch vectors so the per-frame emitters never build garbage.
+  const smokeOrigin = new THREE.Vector3();
+  const tailOffset = new THREE.Vector3(0, 0.2, 2.4);
+  const fallbackTips = [new THREE.Vector3(), new THREE.Vector3()];
+
   function spawn(position, options = {}) {
     const particle = particles[cursor % MAX_PARTICLES];
     cursor += 1;
@@ -127,6 +132,21 @@ function createEffects(scene) {
     });
   }
 
+  /**
+   * Where the contrails should leave the aeroplane. The caller may hand over the real wingtip
+   * positions (aircraft.wingtips passed as a function, or a pair of vectors); without them we fall
+   * back to the modelled offsets so the effect still reads in isolation.
+   */
+  function wingtipPair(ctx, player) {
+    const supplied = ctx.wingtips;
+    if (typeof supplied === 'function') return supplied();
+    if (Array.isArray(supplied) && supplied.length >= 2) return supplied;
+    if (!player) return null;
+    fallbackTips[0].set(-5.4, -0.1, 1.1).applyQuaternion(player.quaternion).add(player.position);
+    fallbackTips[1].set(5.4, -0.1, 1.1).applyQuaternion(player.quaternion).add(player.position);
+    return fallbackTips;
+  }
+
   function update(dt, ctx = {}) {
     for (const particle of particles) {
       if (particle.life <= 0) continue;
@@ -155,32 +175,32 @@ function createEffects(scene) {
     }
 
     const player = ctx.player;
-    if (player) {
-      smokeClock += dt;
-      const hurt = player.hull / 100;
-      if (hurt < 0.72 && smokeClock > 0.06) {
-        smokeClock = 0;
-        const origin = player.position.clone().add(new THREE.Vector3(0, 0.2, 2.4).applyQuaternion(player.quaternion));
-        spawn(origin, {
-          color: hurt < 0.4 ? 0x2a2a2a : 0x9a9a9a,
-          size: 7,
-          life: 1.6,
-          growth: 26,
-          opacity: 0.42,
-          velocity: new THREE.Vector3(0, 1.5, 0),
-        });
-        if (hurt < 0.35) {
-          spawn(origin, { color: 0xff7a33, glow: true, size: 4, life: 0.35, growth: 16, opacity: 0.85, gravity: 0 });
-        }
-      }
+    if (!player) return;
 
-      contrailClock += dt;
-      if (contrailClock > 0.05 && player.speed > 42 && player.agl > 8) {
-        contrailClock = 0;
-        for (const side of [-1, 1]) {
-          const tip = player.position
-            .clone()
-            .add(new THREE.Vector3(side * 5.4, -0.1, 1.1).applyQuaternion(player.quaternion));
+    smokeClock += dt;
+    const hurt = player.hull / 100;
+    if (hurt < 0.72 && smokeClock > 0.06) {
+      smokeClock = 0;
+      smokeOrigin.copy(tailOffset).applyQuaternion(player.quaternion).add(player.position);
+      spawn(smokeOrigin, {
+        color: hurt < 0.4 ? 0x2a2a2a : 0x9a9a9a,
+        size: 7,
+        life: 1.6,
+        growth: 26,
+        opacity: 0.42,
+        velocity: new THREE.Vector3(0, 1.5, 0),
+      });
+      if (hurt < 0.35 && chance(0.6, random)) {
+        spawn(smokeOrigin, { color: 0xff7a33, glow: true, size: 4, life: 0.35, growth: 16, opacity: 0.85, gravity: 0 });
+      }
+    }
+
+    contrailClock += dt;
+    if (contrailClock > 0.05 && player.speed > 42 && player.agl > 8) {
+      contrailClock = 0;
+      const tips = wingtipPair(ctx, player);
+      if (tips) {
+        for (const tip of tips) {
           spawn(tip, {
             color: 0xffffff,
             size: 2.4,

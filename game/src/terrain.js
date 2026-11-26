@@ -37,6 +37,43 @@ function sampleHeight(x, z) {
   return h;
 }
 
+const GROUND_SAND = new THREE.Color('#c2a878');
+const GROUND_SCRUB = new THREE.Color('#5c6c3c');
+const GROUND_FOREST = new THREE.Color('#2f4429');
+const GROUND_ROCK = new THREE.Color('#6d6255');
+const GROUND_DARK_ROCK = new THREE.Color('#4a4239');
+const GROUND_SNOW = new THREE.Color('#e9eef3');
+const GROUND_SHELF = new THREE.Color('#7d8a55');
+
+/**
+ * The one place ground colour is decided: height bands, then slope, then the mown shelf around
+ * the strip. Writes into `target` so the surface build can reuse a single colour.
+ */
+function groundColor(x, z, y, slope, target = new THREE.Color()) {
+  const tint = target;
+  if (y < WORLD.seaLevel + 5) tint.copy(GROUND_SAND);
+  else if (y < 120) tint.copy(GROUND_SAND).lerp(GROUND_SCRUB, smoothstep(WORLD.seaLevel + 4, 130, y));
+  else if (y < 430) tint.copy(GROUND_SCRUB).lerp(GROUND_FOREST, smoothstep(140, 420, y));
+  else if (y < 900) tint.copy(GROUND_FOREST).lerp(GROUND_ROCK, smoothstep(430, 880, y));
+  else tint.copy(GROUND_ROCK).lerp(GROUND_SNOW, smoothstep(880, 1280, y));
+
+  const steep = smoothstep(0.35, 0.9, slope);
+  tint.lerp(GROUND_ROCK, steep * 0.8);
+  if (steep > 0.55) tint.lerp(GROUND_DARK_ROCK, (steep - 0.55) * 1.4);
+  if (y > 1000) tint.lerp(GROUND_SNOW, smoothstep(1000, 1320, y) * (1 - steep * 0.6));
+
+  const toStrip = Math.max(Math.abs(x - AIRPORT.x) / 2600, Math.abs(z - AIRPORT.z) / 1500);
+  if (toStrip < 1) tint.lerp(GROUND_SHELF, (1 - toStrip) * 0.55);
+
+  // Patchy ground cover so the valley is not one flat wash of colour.
+  const patch = fbm(x / 260, z / 260, 91, 3);
+  tint.multiplyScalar(0.82 + patch * 0.42);
+  const dry = fbm(x / 900 + 11, z / 900 - 7, 77, 2);
+  if (y < 200) tint.lerp(GROUND_SAND, clamp01((dry - 0.52) * 1.8) * 0.35);
+
+  return tint;
+}
+
 function createTerrain(scene) {
   const span = WORLD.size;
   const grid = WORLD.grid;
@@ -74,6 +111,14 @@ function createTerrain(scene) {
     return Math.hypot(dx, dz) / (2 * d);
   }
 
+  /** Height and slope in one query, for callers that need both. */
+  function terrainAt(x, z) {
+    const d = 26;
+    const dx = heightAt(x + d, z) - heightAt(x - d, z);
+    const dz = heightAt(x, z + d) - heightAt(x, z - d);
+    return { height: heightAt(x, z), slope: Math.hypot(dx, dz) / (2 * d) };
+  }
+
   const mesh = buildSurface(span, 448, heightAt);
   scene.add(mesh);
 
@@ -94,7 +139,7 @@ function createTerrain(scene) {
   const strip = buildAirport(scene, heightAt);
   const trees = scatterPines(scene, heightAt, slopeAt);
 
-  return { mesh, water, strip, trees, heightAt, slopeAt };
+  return { mesh, water, strip, trees, heightAt, slopeAt, terrainAt, groundColor };
 }
 
 function buildSurface(span, segments, heightAt) {
@@ -102,12 +147,6 @@ function buildSurface(span, segments, heightAt) {
   geometry.rotateX(-Math.PI / 2);
   const position = geometry.attributes.position;
   const colors = new Float32Array(position.count * 3);
-  const sand = new THREE.Color('#c2a878');
-  const scrub = new THREE.Color('#5c6c3c');
-  const forest = new THREE.Color('#2f4429');
-  const rock = new THREE.Color('#6d6255');
-  const darkRock = new THREE.Color('#4a4239');
-  const snow = new THREE.Color('#e9eef3');
   const tint = new THREE.Color();
 
   for (let i = 0; i < position.count; i += 1) {
@@ -121,25 +160,7 @@ function buildSurface(span, segments, heightAt) {
     const dz = heightAt(x, z + d) - heightAt(x, z - d);
     const slope = Math.hypot(dx, dz) / (2 * d);
 
-    const toStrip = Math.max(Math.abs(x - AIRPORT.x) / 2600, Math.abs(z - AIRPORT.z) / 1500);
-    if (y < WORLD.seaLevel + 5) tint.copy(sand);
-    else if (y < 120) tint.copy(sand).lerp(scrub, smoothstep(WORLD.seaLevel + 4, 130, y));
-    else if (y < 430) tint.copy(scrub).lerp(forest, smoothstep(140, 420, y));
-    else if (y < 900) tint.copy(forest).lerp(rock, smoothstep(430, 880, y));
-    else tint.copy(rock).lerp(snow, smoothstep(880, 1280, y));
-
-    const steep = smoothstep(0.35, 0.9, slope);
-    tint.lerp(rock, steep * 0.8);
-    if (steep > 0.55) tint.lerp(darkRock, (steep - 0.55) * 1.4);
-    if (y > 1000) tint.lerp(snow, smoothstep(1000, 1320, y) * (1 - steep * 0.6));
-    if (toStrip < 1) tint.lerp(new THREE.Color('#7d8a55'), (1 - toStrip) * 0.55);
-
-    // Patchy ground cover so the valley is not one flat wash of colour.
-    const patch = fbm(x / 260, z / 260, 91, 3);
-    tint.multiplyScalar(0.82 + patch * 0.42);
-    const dry = fbm(x / 900 + 11, z / 900 - 7, 77, 2);
-    if (y < 200) tint.lerp(sand, clamp01((dry - 0.52) * 1.8) * 0.35);
-
+    groundColor(x, z, y, slope, tint);
     colors[i * 3] = tint.r;
     colors[i * 3 + 1] = tint.g;
     colors[i * 3 + 2] = tint.b;

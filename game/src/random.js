@@ -19,6 +19,13 @@ function smoothstep(edge0, edge1, value) {
 }
 const damp = (a, b, rate, dt) => lerp(a, b, 1 - Math.exp(-rate * dt));
 
+/** One coin toss at probability p, drawn from the caller's stream so seeded runs stay repeatable. */
+function chance(p, rng = Math.random) {
+  if (!(p > 0)) return false;
+  if (p >= 1) return true;
+  return rng() < p;
+}
+
 const HASH_A = 374761393;
 const HASH_B = 668265263;
 
