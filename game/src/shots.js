@@ -86,6 +86,19 @@ function createShotRunner(context) {
     camera.updateProjectionMatrix();
   }
 
+  // Highest ground anywhere under a vertical ring's span, sampled on a disc of the ring's radius so a
+  // gate that straddles a slope or the runway shelf is lifted clear instead of sinking its near arc.
+  function groundUnderRing(center, radius) {
+    let high = terrain.heightAt(center.x, center.z);
+    for (let i = 0; i < 8; i += 1) {
+      const angle = (i / 8) * Math.PI * 2;
+      const x = center.x + Math.cos(angle) * radius;
+      const z = center.z + Math.sin(angle) * radius;
+      high = Math.max(high, terrain.heightAt(x, z));
+    }
+    return high;
+  }
+
   function gate(offsetForward, lateral, drop, radius = 42) {
     flatForward.set(0, 0, -1).applyQuaternion(flight.state.quaternion).setY(0).normalize();
     flatRight.set(1, 0, 0).applyQuaternion(flight.state.quaternion).setY(0).normalize();
@@ -94,7 +107,9 @@ function createShotRunner(context) {
       .addScaledVector(flatForward, offsetForward)
       .addScaledVector(flatRight, lateral)
       .add(new THREE.Vector3(0, -drop, 0));
-    const floor = terrain.heightAt(center.x, center.z) + radius + 26;
+    // Centre sits 4/3 of a radius above the highest ground under the span, so the lowest point of the
+    // ring clears that ground by a third of the radius whatever the slope does.
+    const floor = groundUnderRing(center, radius) + (radius * 4) / 3;
     if (center.y < floor) center.y = floor;
     return entities.addRing(center, flatForward, radius);
   }
@@ -337,9 +352,24 @@ function createShotRunner(context) {
       rings: entities.rings.map((ring) => project(ring.group.position)),
       ringPixels: ringSize,
       ringWorld: entities.rings.map((ring) => ring.group.position.toArray().map(Math.round)),
+      // Lowest point of the whole gate (torus tube included) minus the highest ground under its span;
+      // must stay at least a third of the radius or the lower arc is planted in a slope.
+      ringClearance: entities.rings.map((ring) => {
+        const center = ring.group.position;
+        const ground = groundUnderRing(center, ring.radius);
+        return Number((center.y - ring.radius * 1.075 - ground).toFixed(1));
+      }),
+      ringMinimumClearance: entities.rings.length
+        ? entities.rings.reduce((low, ring) => {
+            const ground = groundUnderRing(ring.group.position, ring.radius);
+            const clear = (ring.group.position.y - ring.radius * 1.075 - ground) / ring.radius;
+            return Math.min(low, Number(clear.toFixed(3)));
+          }, Infinity)
+        : null,
       sun: project(camera.position.clone().addScaledVector(sky.direction, 6000)),
       runway: project(new THREE.Vector3(AIRPORT.x - AIRPORT.length * 0.5, AIRPORT.elevation + 2, AIRPORT.z)),
       planeWorld: flight.state.position.toArray().map(Math.round),
+      gearDown: Number(aircraft.state.gearDown.toFixed(2)),
       forward: new THREE.Vector3(0, 0, -1).applyQuaternion(flight.state.quaternion).toArray().map((v) => Number(v.toFixed(2))),
       camera: camera.position.toArray().map(Math.round),
       viewport: [window.innerWidth, window.innerHeight],
@@ -355,16 +385,20 @@ function createShotRunner(context) {
   function update(dt) {
     if (!built) return;
     frames += 1;
-    aircraft.update(dt, {
+    // The first animation frame can arrive with a negative or huge delta; a staged shot is a still,
+    // so step it by a sane frame and let the gear snap instead of easing down out of the gate.
+    const step = clamp(dt, 0, 1 / 30);
+    if (frames === 1) aircraft.state.gearDown = flight.state.gearDown ? 1 : 0;
+    aircraft.update(step, {
       throttle: flight.state.throttle,
       gearDown: flight.state.gearDown,
       flap: flight.state.flap,
       controls: flight.state.controls,
       airspeed: flight.state.speed,
     });
-    effects.update(dt, { player: flight.state, wingtips: aircraft.wingtips });
-    entities.update(dt, {});
-    sky.update(dt, camera);
+    effects.update(step, { player: flight.state, wingtips: aircraft.wingtips });
+    entities.update(step, {});
+    sky.update(step, camera);
     aircraft.placeShadow(
       terrain.heightAt(flight.state.position.x, flight.state.position.z),
       sky.direction,
