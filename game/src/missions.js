@@ -22,6 +22,10 @@ function createMissions({ flight, entities, effects, audio }) {
   let result = null;
   let shotsFired = 0;
   let shotsHit = 0;
+  let distanceFlown = 0;
+  let sightseeingPoints = 0;
+  let sightseeingMeter = 0;
+  const lastPosition = new THREE.Vector3();
 
   function start(def) {
     current = def;
@@ -37,6 +41,9 @@ function createMissions({ flight, entities, effects, audio }) {
     landedTimer = 0;
     shotsFired = 0;
     shotsHit = 0;
+    distanceFlown = 0;
+    sightseeingPoints = 0;
+    sightseeingMeter = 0;
     message = def.brief;
     messageTimer = 6;
     entities.clear();
@@ -51,6 +58,7 @@ function createMissions({ flight, entities, effects, audio }) {
     state.velocity.copy(flight.forward(new THREE.Vector3())).multiplyScalar(52);
     state.velocity.y = -2;
     state.agl = 320;
+    lastPosition.copy(state.position);
 
     if (def.id === 'ridge') {
       entities.buildCourse(def.rings, { startX: 300, startZ: 260, heading: 0.08 });
@@ -92,7 +100,7 @@ function createMissions({ flight, entities, effects, audio }) {
       const next = entities.beacons.find((beacon) => !beacon.visited);
       return next ? `Beacon ${next.index + 1} of 3` : 'Land at Kestrel Strip';
     }
-    return 'Free flight';
+    return `${km(distanceFlown)} flown`;
   }
 
   function objectiveSub() {
@@ -102,6 +110,7 @@ function createMissions({ flight, entities, effects, audio }) {
       if (current.id === 'ridge') return 'Fly the ring, not the horizon';
       return 'Follow the light masts down the coast';
     }
+    if (current.id === 'free') return 'No job to finish — the strip is always open';
     return 'Runway 09 — gear down, flaps two, land';
   }
 
@@ -120,7 +129,8 @@ function createMissions({ flight, entities, effects, audio }) {
     const soft = landing < 2.2;
     if (success) {
       score += soft ? SCORE.landingSoft : SCORE.landingHard;
-      score += Math.round(timeLeft * SCORE.timeBonus);
+      // Open Skies carries no clock pressure, so it pays no time bonus.
+      if (current.id !== 'free') score += Math.round(timeLeft * SCORE.timeBonus);
     } else {
       score += SCORE.crash;
     }
@@ -134,6 +144,8 @@ function createMissions({ flight, entities, effects, audio }) {
       landing: landing,
       soft,
       time: elapsed,
+      distance: Math.round(distanceFlown),
+      sightseeing: sightseeingPoints,
       accuracy: shotsFired ? Math.round((shotsHit / shotsFired) * 100) : 0,
     };
     audio.chime(success);
@@ -152,6 +164,19 @@ function createMissions({ flight, entities, effects, audio }) {
     pullUp = !state.onGround && state.agl < 26 && state.verticalSpeed < -6 && state.speed > 52;
 
     entities.update(dt, { player: state });
+
+    const step = Math.hypot(state.position.x - lastPosition.x, state.position.z - lastPosition.z);
+    // A reset or a teleport would otherwise pay out a whole lap in one frame.
+    if (step < 240) distanceFlown += step;
+    lastPosition.copy(state.position);
+    if (current.id === 'free') {
+      sightseeingMeter += step < 240 ? step : 0;
+      while (sightseeingMeter >= SIGHTSEEING_METERS) {
+        sightseeingMeter -= SIGHTSEEING_METERS;
+        sightseeingPoints += SCORE.sightseeing;
+        score += SCORE.sightseeing;
+      }
+    }
 
     while (entities.events.length) {
       const event = entities.events.shift();
@@ -333,18 +358,23 @@ function createMissions({ flight, entities, effects, audio }) {
 
   function debriefRows() {
     if (!result) return [];
-    return [
+    const rows = [
       { label: 'Gates', value: String(result.rings) },
       { label: 'Crates', value: String(result.drops) },
       { label: 'Drones', value: String(result.drones) },
-      {
-        label: 'Touchdown',
-        value: result.success ? `${result.landing.toFixed(1)} m/s ${result.soft ? 'soft' : 'firm'}` : result.reason,
-        color: result.success ? '#7dffa8' : '#ff6b5e',
-      },
-      { label: 'Time on task', value: `${Math.floor(result.time / 60)}:${String(Math.floor(result.time % 60)).padStart(2, '0')}` },
-      { label: 'Score', value: String(result.score), color: '#ffca55' },
     ];
+    if (current.id === 'free') {
+      rows.push({ label: 'Distance', value: km(result.distance) });
+      rows.push({ label: 'Sightseeing', value: `+${result.sightseeing}`, color: '#8ff0ff' });
+    }
+    rows.push({
+      label: 'Touchdown',
+      value: result.success ? `${result.landing.toFixed(1)} m/s ${result.soft ? 'soft' : 'firm'}` : result.reason,
+      color: result.success ? '#7dffa8' : '#ff6b5e',
+    });
+    rows.push({ label: 'Time on task', value: `${Math.floor(result.time / 60)}:${String(Math.floor(result.time % 60)).padStart(2, '0')}` });
+    rows.push({ label: 'Score', value: String(result.score), color: '#ffca55' });
+    return rows;
   }
 
   function clock() {

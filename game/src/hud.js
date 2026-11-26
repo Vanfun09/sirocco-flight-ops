@@ -114,7 +114,7 @@ function createHud(canvas) {
     value(`${String(Math.round(state.heading) % 360).padStart(3, '0')}°`, cx, top + 45, 12, PALETTE.hudGood, 'center');
   }
 
-  function drawAirpeed(x, y, r, state) {
+  function drawAirspeed(x, y, r, state) {
     dialFace(x, y, r, { from: -220, to: 40, steps: 10, unit: 'KNOTS', labels: ['0', '', '40', '', '80', '', '120', '', '160', '', '200'] });
     const speed = state.speed * KT;
     const angle = -220 + (clamp(speed, 0, 200) / 200) * 260;
@@ -386,7 +386,7 @@ function createHud(canvas) {
 
       const r = 58;
       const baseY = height - 94;
-      drawAirpeed(126, baseY, r, state);
+      drawAirspeed(126, baseY, r, state);
       drawAttitude(288, baseY, r, state);
       drawAltitude(width - 126, baseY, r, state);
       drawVerticalSpeed(width - 220, baseY - r * 0.8, r * 1.5, state);
@@ -400,8 +400,10 @@ function createHud(canvas) {
       value(String(Math.round(1200 + state.throttle * 1500)), cx + 10, height - 102, 13, PALETTE.hud, 'center');
 
       const fuelRatio = clamp(state.fuel / 100, 0, 1);
+      const fuelColor = fuelRatio > 0.25 ? PALETTE.hudGood : PALETTE.hudBad;
       label('FUEL', cx - 36, height - 62, 9, PALETTE.hudDim, 'center');
-      bar(cx - 106, height - 54, 140, 8, fuelRatio, fuelRatio > 0.25 ? PALETTE.hudGood : PALETTE.hudBad);
+      bar(cx - 106, height - 54, 140, 8, fuelRatio, fuelColor);
+      value(`${Math.round(fuelRatio * 100)}%`, cx + 50, height - 50, 12, fuelColor, 'left');
 
       if (state.stall > 0.15 || state.hull < 45 || state.overspeed > 0) {
         const message = state.stall > 0.15 ? 'STALL' : state.overspeed > 0 ? 'OVERSPEED' : 'AIRFRAME DAMAGE';
@@ -410,10 +412,11 @@ function createHud(canvas) {
     } else {
       const r = Math.min(62, height * 0.092);
       const baseY = height - 84;
-      drawAirpeed(r + 28, baseY, r, state);
+      drawAirspeed(r + 28, baseY, r, state);
       drawAltitude(width - r - 28, baseY, r, state);
       drawAttitude(width / 2, baseY, r * 0.94, state);
       drawVerticalSpeed(width - r * 2 - 82, baseY - r * 0.7, r * 1.35, state);
+      compactGearFlaps(state);
     }
 
     // Mission card, top left.
@@ -457,6 +460,17 @@ function createHud(canvas) {
   function annunciator(x, y, name, state, color) {
     label(name, x, y, 8, PALETTE.hudDim, 'center');
     label(state, x, y + 14, 11, color, 'center');
+  }
+
+  /** Compact panel only: a thin gear/flap strip over the bottom edge, under the attitude dial. */
+  function compactGearFlaps(state) {
+    const cx = width / 2;
+    const y = height - 15;
+    const gear = state.gearDown ? 'DOWN' : 'UP';
+    const flaps = ['UP', '1', '2'][Math.min(2, Math.round(state.flap * 2))];
+    panel(cx - 86, y - 11, 172, 22, 6, 'rgba(6,11,17,0.55)');
+    label(`GEAR ${gear}`, cx - 44, y, 9, state.gearDown ? PALETTE.hudGood : PALETTE.hudWarn, 'center');
+    label(`FLAPS ${flaps}`, cx + 44, y, 9, state.flap > 0.05 ? PALETTE.hudGood : PALETTE.hudDim, 'center');
   }
 
   function bar(x, y, w, h, ratio, color) {
@@ -527,7 +541,9 @@ function createHud(canvas) {
     ctx.fillText('Choose a job', 64, 116);
 
     const cardW = Math.min(360, (width - 200) / 2);
-    const cardH = 132;
+    const rows = Math.max(1, Math.ceil(view.missions.length / 2));
+    // Five cards need three rows: let the cards shrink a little rather than run off a short window.
+    const cardH = Math.max(96, Math.min(132, Math.floor((height - 152 - 96 - (rows - 1) * 18) / rows)));
     view.missions.forEach((mission, index) => {
       const col = index % 2;
       const row = Math.floor(index / 2);
@@ -595,7 +611,7 @@ function createHud(canvas) {
       value(row.value, x + w - 26, ly, 14, row.color || PALETTE.hud, 'right');
     });
 
-    label('ENTER  FLY AGAIN        ESC  MISSIONS', x + 26, y + 236, 11, PALETTE.hudWarn);
+    label('ENTER  FLY AGAIN        R  RESTART        ESC  MISSIONS', x + 26, y + 236, 11, PALETTE.hudWarn);
   }
 
   function drawPaused() {
@@ -628,5 +644,19 @@ function createHud(canvas) {
 
   resize();
 
-  return { canvas, ctx, resize, clear, drawFlight, drawTitle, drawSelect, drawBriefing, drawDebrief, drawPaused, project, width: () => width, height: () => height };
+  return {
+    canvas,
+    ctx,
+    resize,
+    clear,
+    drawFlight,
+    drawTitle,
+    drawSelect,
+    drawBriefing,
+    drawDebrief,
+    drawPaused,
+    project,
+    width: () => width,
+    height: () => height,
+  };
 }

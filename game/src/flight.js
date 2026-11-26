@@ -269,6 +269,3 @@ function createFlight(terrain) {
 
   return { state, update, reset, forward, right, damage, runwaySurface, bankAngle };
 }
-
-const KNOTS = 1.94384;
-const FEET = 3.28084;

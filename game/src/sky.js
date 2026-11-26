@@ -1,4 +1,4 @@
-// Sky, sun, cloud banks and the four weather looks the missions use. One shader dome does the
+// Sky, sun, cloud banks and the five weather looks the missions use. One shader dome does the
 // gradient and the sun disc, so daylight, haze, storm and dusk differ by uniforms, not by meshes.
 
 const PRESETS = {
@@ -251,7 +251,6 @@ function createSky(scene, renderer) {
     stars.material.opacity = preset.stars > 0 ? 0.9 : 0;
 
     // Lay puffs out in banks so the sky has structure instead of a uniform speckle.
-    let shown = 0;
     const tint = new THREE.Color(preset.cloudTint);
     for (let i = 0; i < puffs.length; i += 1) {
       const sprite = puffs[i];
@@ -262,23 +261,20 @@ function createSky(scene, renderer) {
       const bank = Math.floor(i / 4);
       const angle = (bank / Math.max(1, preset.cloudCount / 4)) * Math.PI * 2 + random() * 0.7;
       const distance = 2200 + random() * 5200;
-      const height = preset.weather === 'storm' ? 620 + random() * 460 : 900 + random() * 1500;
+      const height = 900 + random() * 1500;
       sprite.position.set(Math.cos(angle) * distance, height, Math.sin(angle) * distance);
       const size = 700 + random() * 1500;
       sprite.scale.set(size, size * (0.36 + random() * 0.2), 1);
       sprite.material.opacity = 0.35 + random() * 0.5;
       sprite.material.color.copy(tint);
       sprite.visible = true;
-      shown += 1;
     }
-    state.shown = shown;
   }
 
   function update(dt, camera) {
     state.time += dt;
     dome.position.copy(camera.position);
     stars.position.copy(camera.position);
-    dome.context = null;
 
     if (state.preset.lightning > 0) {
       state.flashTimer -= dt;
@@ -301,11 +297,9 @@ function createSky(scene, renderer) {
     sunLight.target.updateMatrixWorld();
   }
 
-  function setTimeScale() {}
-
   setWeather('clear');
 
-  return { dome, sunLight, ambient, clouds, stars, setWeather, update, setTimeScale, state, direction: sunDirection };
+  return { dome, sunLight, ambient, clouds, stars, setWeather, update, state, direction: sunDirection };
 }
 
 function makeCloudTexture() {
@@ -336,4 +330,3 @@ function makeCloudTexture() {
   texture.needsUpdate = true;
   return texture;
 }
-

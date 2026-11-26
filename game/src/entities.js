@@ -54,12 +54,14 @@ function createEntities(scene, terrain) {
   }
 
   function clear() {
-    while (root.children.length) {
-      const child = root.children.pop();
+    // Empty the group in place: splicing while walking the array leaves the scene graph half torn
+    // down between frames. Dispose geometry first, then drop every child at once.
+    for (const child of root.children) {
       child.traverse((node) => {
         if (node.geometry) node.geometry.dispose();
       });
     }
+    root.children.length = 0;
     rings.length = 0;
     drones.length = 0;
     drops.length = 0;
@@ -72,7 +74,9 @@ function createEntities(scene, terrain) {
     const group = new THREE.Group();
     group.position.copy(position);
     group.lookAt(position.clone().add(direction));
-    const torus = new THREE.Mesh(new THREE.TorusGeometry(radius, radius * 0.075, 10, 48), RING_MAT);
+    // Each gate owns its torus material so the next-gate pulse cannot light up the whole course.
+    const torusMaterial = RING_MAT.clone();
+    const torus = new THREE.Mesh(new THREE.TorusGeometry(radius, radius * 0.075, 10, 48), torusMaterial);
     torus.castShadow = false;
     group.add(torus);
     const lip = new THREE.Mesh(new THREE.TorusGeometry(radius - radius * 0.085, radius * 0.022, 8, 44), RING_INNER_MAT);
@@ -80,7 +84,7 @@ function createEntities(scene, terrain) {
     group.add(lip);
     for (let i = 0; i < 10; i += 1) {
       const angle = (i / 10) * Math.PI * 2;
-      const stud = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.1, radius * 0.16, radius * 0.16), RING_MAT);
+      const stud = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.1, radius * 0.16, radius * 0.16), torusMaterial);
       stud.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
       stud.rotation.z = angle;
       group.add(stud);
@@ -295,12 +299,20 @@ function createEntities(scene, terrain) {
 
   function update(dt, ctx) {
     const { player, onEvent } = ctx || {};
+    // The next gate in the sequence is the only one that breathes: everything behind it holds a
+    // flat glow so the eye reads the course order at a glance.
+    const nextRing = rings.find((ring) => !ring.passed);
     for (const ring of rings) {
       ring.phase += dt * 1.6;
       ring.group.position.y = ring.bob + Math.sin(ring.phase) * 3.2;
-      const pulse = 0.45 + 0.18 * Math.sin(ring.phase * 1.4);
-      ring.halo.material.opacity = ring.passed ? 0.12 : pulse;
-      ring.torus.material = ring.passed ? RING_MAT : RING_MAT;
+      if (ring === nextRing) {
+        const pulse = 0.55 + 0.42 * Math.sin(ring.phase * 2.4);
+        ring.halo.material.opacity = 0.62 + 0.3 * Math.sin(ring.phase * 2.4);
+        ring.torus.material.emissiveIntensity = 0.85 + pulse * 1.35;
+      } else {
+        ring.halo.material.opacity = ring.passed ? 0.12 : 0.36;
+        ring.torus.material.emissiveIntensity = ring.passed ? 0.25 : 0.85;
+      }
       if (ring.passed) continue;
       if (player) {
         const rel = player.position.clone().sub(ring.group.position);

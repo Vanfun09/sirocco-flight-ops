@@ -4,7 +4,7 @@
 [![rank](https://make.fun/badge/best-flight-game-20261126-0057/Vanfun09/sirocco-flight-ops/rank.svg)](https://make.fun/bounty/best-flight-game-20261126-0057/leaderboard)
 [![reward](https://make.fun/badge/best-flight-game-20261126-0057/Vanfun09/sirocco-flight-ops/reward.svg)](https://make.fun/bounty/best-flight-game-20261126-0057/leaderboard)
 
-Four jobs over one coastal island, flown from the cockpit of a light aircraft you can actually
+Five jobs over one coastal island, flown from the cockpit of a light aircraft you can actually
 stall, spin, grease onto a runway or put into a hillside.
 
 **Sirocco** is a 3D flight game that runs in a desktop browser with no install, no build step and
@@ -51,17 +51,21 @@ bank angle — under 5.2 m/s and reasonably level is a landing, anything else is
 The wings roll themselves level when the stick is centred and the nose stops climbing at 55°, so a
 keyboard is enough to fly it; the rudder and the flaps are there for the pilots who want them.
 
-## The four jobs
+## The five jobs
 
 - **Ridge Run** — six gates threaded through the eastern pass at dawn, then a landing back at
   Kestrel Strip. Gates pay for a clean, level line.
 - **Lifeline** — three supply crates onto valley markers: get low, get slow, get lined up.
 - **Storm Watch** — four survey drones over the storm front, guns only, flak coming back at you.
 - **Dusk Ferry** — three coast beacons into a night landing, the strip lit by its threshold lights.
+- **Open Skies** — no targets and no clock: fly the island and every 500 m of ground you cover pays
+  a sightseeing point. The strip is still open whenever you want to land, and the run ends by
+  choice or by empty tank, not by a timer.
 
 Each mission starts airborne with the aeroplane trimmed and the throttle part open, so the first
-thing you do is fly, not taxi. Score comes from gates, crates, drones, a soft touchdown and the time
-left on the clock; the best score per mission is kept in the browser.
+thing you do is fly, not taxi. Score comes from gates, crates, drones, beacons, distance flown with
+the island under the wings in Open Skies, a soft touchdown and the time left on the clock; the best
+score per job is kept in the browser, and a failed run reports what it cost instead of a score.
 
 ## How it is built
 

@@ -137,6 +137,22 @@ function updateFlight(dt) {
   }
 }
 
+// Briefing copy is a lookup now that a fifth job shares the same screen.
+function routeLine(mission) {
+  if (mission.id === 'ridge') return 'Six gates through the eastern pass, then runway 09';
+  if (mission.id === 'lifeline') return 'Three valley markers, then runway 09';
+  if (mission.id === 'watch') return 'Four survey drones over the front, then runway 09';
+  if (mission.id === 'free') return 'No route, no clock: the island is yours, then runway 09 to land';
+  return 'Three coast beacons, then a night landing';
+}
+
+function weatherLine(weather) {
+  if (weather === 'clear') return 'Clear, light wind, good visibility';
+  if (weather === 'haze') return 'Warm haze, low sun in the west';
+  if (weather === 'storm') return 'Storm cells, heavy air, lightning';
+  return 'Dusk into night, strip unlit until called';
+}
+
 function frameView() {
   if (screen === 'flying' || screen === 'paused') {
     hud.drawFlight({
@@ -158,7 +174,7 @@ function frameView() {
     if (paused) hud.drawPaused();
   } else if (screen === 'title') {
     hud.drawTitle({
-      subtitle: 'A light aircraft, one coastline, four jobs. Keyboard or mouse, nothing to install.',
+      subtitle: 'A light aircraft, one coastline, five jobs. Keyboard or mouse, nothing to install.',
       items: ['Start a job', 'Controls'],
       selected: menuIndex,
     });
@@ -179,22 +195,8 @@ function frameView() {
     const mission = MISSIONS[selected];
     hud.drawBriefing({
       mission,
-      route:
-        mission.id === 'ridge'
-          ? 'Six gates through the eastern pass, then runway 09'
-          : mission.id === 'lifeline'
-            ? 'Three valley markers, then runway 09'
-            : mission.id === 'watch'
-              ? 'Four survey drones over the front, then runway 09'
-              : 'Three coast beacons, then a night landing',
-      weather:
-        mission.weather === 'clear'
-          ? 'Clear, light wind, good visibility'
-          : mission.weather === 'haze'
-            ? 'Warm haze, low sun in the west'
-            : mission.weather === 'storm'
-              ? 'Storm cells, heavy air, lightning'
-              : 'Dusk into night, strip unlit until called',
+      route: routeLine(mission),
+      weather: weatherLine(mission.weather),
     });
   } else if (screen === 'debrief') {
     hud.drawDebrief({ mission: missions.mission, success: missions.result?.success ?? false, rows: missions.debriefRows() });
@@ -203,8 +205,8 @@ function frameView() {
 
 function handleMenuKeys() {
   if (screen === 'title') {
-    if (input.consume('ArrowDown') || input.consume('KeyS')) menuIndex = (menuIndex + 1) % 2;
-    if (input.consume('ArrowUp') || input.consume('KeyW')) menuIndex = (menuIndex + 1) % 2;
+    if (input.consume('ArrowDown') || input.consume('KeyS')) menuIndex = 1;
+    if (input.consume('ArrowUp') || input.consume('KeyW')) menuIndex = 0;
     if (input.consume('Enter') || input.consume('Space')) {
       audio.resume();
       screen = menuIndex === 0 ? 'select' : 'controls';
@@ -213,22 +215,33 @@ function handleMenuKeys() {
     return;
   }
   if (screen === 'controls' || screen === 'briefing' || screen === 'debrief') {
+    // R flies the same job again straight from the debrief, skipping the menus.
+    if (screen === 'debrief' && input.consume('KeyR')) {
+      startMission(missions.mission);
+      return;
+    }
     if (input.consume('Enter') || input.consume('Space')) {
       if (screen === 'briefing') startMission(MISSIONS[selected]);
-      else if (screen === 'debrief') {
-        screen = 'flying';
-        missions.phase = 'flying';
-        startMission(missions.mission);
-      } else screen = 'title';
+      else if (screen === 'debrief') startMission(missions.mission);
+      else screen = 'title';
     }
     if (input.consume('Escape')) screen = screen === 'briefing' ? 'select' : 'title';
     return;
   }
   if (screen === 'select') {
+    // Five cards on a two-column grid: left/right walks a row, up/down steps a row and stays in
+    // bounds rather than wrapping onto a card the fifth slot does not have.
+    const columns = 2;
     if (input.consume('ArrowRight') || input.consume('KeyD')) selected = (selected + 1) % MISSIONS.length;
     if (input.consume('ArrowLeft') || input.consume('KeyA')) selected = (selected + MISSIONS.length - 1) % MISSIONS.length;
-    if (input.consume('ArrowDown')) selected = (selected + 2) % MISSIONS.length;
-    if (input.consume('ArrowUp')) selected = (selected + 2) % MISSIONS.length;
+    if (input.consume('ArrowDown')) {
+      const next = selected + columns;
+      if (next < MISSIONS.length) selected = next;
+    }
+    if (input.consume('ArrowUp')) {
+      const next = selected - columns;
+      if (next >= 0) selected = next;
+    }
     if (input.consume('Enter') || input.consume('Space')) screen = 'briefing';
     if (input.consume('Escape')) screen = 'title';
   }
@@ -301,6 +314,7 @@ window.sirocco = {
   missions,
   entities,
   screen: () => screen,
+  selection: () => ({ index: selected, id: MISSIONS[selected].id, total: MISSIONS.length }),
   setScreen: (next) => {
     screen = next;
   },

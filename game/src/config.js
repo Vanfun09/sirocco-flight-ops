@@ -72,7 +72,12 @@ const SCORE = {
   landingHard: 120,
   crash: -250,
   timeBonus: 8,
+  // Free flight only: one point for every SIGHTSEEING_METERS flown, paid out in missions.js.
+  sightseeing: 1,
 };
+
+/** Distance that earns one sightseeing point in Open Skies. */
+const SIGHTSEEING_METERS = 500;
 
 const PALETTE = {
   hud: '#e8f2ff',
@@ -137,6 +142,18 @@ const MISSIONS = [
     weather: 'dusk',
     time: 20.4,
     rings: 3,
+    drones: 0,
+    drops: 0,
+    fuel: 100,
+  },
+  {
+    id: 'free',
+    name: 'Open Skies',
+    brief: 'No gates, no cargo, no clock worth worrying about. Fly the coast and land when you like.',
+    detail: 'Every 500 m flown pays a sightseeing point. Kestrel Strip still takes you home.',
+    weather: 'clear',
+    time: 30.0,
+    rings: 0,
     drones: 0,
     drops: 0,
     fuel: 100,
